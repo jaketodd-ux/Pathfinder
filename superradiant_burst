@@ -1,0 +1,50 @@
+import numpy as np
+import matplotlib.pyplot as plt
+from qutip import *
+
+# --- CONFIGURATION: The "Virtual" Engine ---
+N_ATOMS = 100        # Number of atoms in the simulation (start small)
+w0 = 1.0 * 2 * np.pi # Atomic frequency
+g = 0.5 * 2 * np.pi  # Coupling strength (How hard the atoms kick)
+kappa = 1.0          # Cavity decay rate (How fast light leaves the engine)
+
+# --- DEFINE QUANTUM OPERATORS ---
+# This math describes "Dicke States" - the core physics of your drive
+# It creates a virtual box of Rubidium atoms
+Jp = tensor(jmat(N_ATOMS/2.0, '+'), qeye(2)) # Atomic Raising Operator
+Jm = tensor(jmat(N_ATOMS/2.0, '-'), qeye(2)) # Atomic Lowering Operator
+Jz = tensor(jmat(N_ATOMS/2.0, 'z'), qeye(2)) # Atomic Inversion Operator
+a  = tensor(qeye(N_ATOMS+1), destroy(2))     # Photon annihilation
+
+# Hamiltonian (The Energy Equation of the Engine)
+H = w0 * Jz + w0 * a.dag() * a + g * (a.dag() * Jm + a * Jp)
+
+# Collapse Operators (Energy Loss)
+c_ops = [np.sqrt(kappa) * a]
+
+# --- THE "IGNITION" ---
+# We start with all atoms "Excited" (Fully Charged) and the cavity empty
+psi0 = tensor(basis(N_ATOMS+1, N_ATOMS), basis(2,0))
+
+# --- RUN SIMULATION ---
+times = np.linspace(0, 10, 1000)
+result = mesolve(H, psi0, times, c_ops, [a.dag() * a])
+
+# --- VISUALIZE THE BURST ---
+photon_count = result.expect[0]
+peak_power = max(photon_count)
+
+print(f"SIMULATION COMPLETE.")
+print(f"Peak Pulse Power: {peak_power:.2f} (Virtual Watts)")
+print(f"Burst Characteristic: {peak_power/N_ATOMS:.2f}x Super-Linear Scaling")
+
+# Plotting the "Stutter Fire" Pulse
+fig, ax = plt.subplots(figsize=(10, 6))
+ax.plot(times, photon_count, 'r-', linewidth=2, label='Mark V-B Output Pulse')
+ax.set_title(f'Virtual Test Fire: Superradiant Pulse (N={N_ATOMS} Atoms)')
+ax.set_xlabel('Time (nanoseconds)')
+ax.set_ylabel('Pulse Intensity (Photons)')
+ax.axvline(times[np.argmax(photon_count)], color='k', linestyle='--', label='Peak Burst')
+ax.legend()
+ax.grid(True)
+plt.show()
