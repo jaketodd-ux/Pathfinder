@@ -1,0 +1,86 @@
+import numpy as np
+import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
+import random
+
+# --- CONFIGURATION: The "Boron Probe" Parameters ---
+MISSION_DISTANCE = 1000  # Light Years (scaled down for sim)
+SENSOR_RANGE = 50        # The "White Cane" length (detection radius)
+OBSTACLE_DENSITY = 500   # Number of stars/debris in the sector
+STEP_SIZE = 10           # Distance traveled per "frame"
+
+class BoronProbe:
+    def __init__(self):
+        self.position = np.array([0.0, 0.0, 0.0])
+        self.target = np.array([MISSION_DISTANCE, MISSION_DISTANCE * 0.2, MISSION_DISTANCE * 0.1])
+        # Start vector pointing roughly at target
+        direction = self.target - self.position
+        self.vector = direction / np.linalg.norm(direction) * STEP_SIZE
+        self.path_history = [self.position.copy()]
+        self.ricochet_count = 0
+
+    def scan_and_move(self, obstacles):
+        # 1. THE WHITE CANE: Look ahead
+        future_pos = self.position + self.vector * (SENSOR_RANGE / STEP_SIZE)
+        
+        collision_risk = False
+        for obs in obstacles:
+            # Check if any obstacle is within the "Tube" of our future path
+            dist = np.linalg.norm(future_pos - obs)
+            if dist < SENSOR_RANGE * 0.5: # 0.5 is safety margin
+                collision_risk = True
+                break
+        
+        # 2. THE RICOCHET LOGIC
+        if collision_risk:
+            # "Inertialess Turn": Pick a random new orthogonal vector (Bounce)
+            # This simulates the Soliton Bubble tilting 45 degrees instantly
+            evasive_turn = np.random.randn(3) 
+            evasive_turn -= evasive_turn.dot(self.vector) * self.vector # Make it orthogonal
+            evasive_turn /= np.linalg.norm(evasive_turn) # Normalize
+            
+            # Blend the evasive turn with the original target vector (to keep moving forward eventually)
+            # The probe zig-zags but tries to realign with the destination
+            target_vector = self.target - self.position
+            target_vector /= np.linalg.norm(target_vector)
+            
+            self.vector = (self.vector + evasive_turn * 5 + target_vector) 
+            self.vector = self.vector / np.linalg.norm(self.vector) * STEP_SIZE
+            self.ricochet_count += 1
+            
+        # 3. MOVE
+        self.position += self.vector
+        self.path_history.append(self.position.copy())
+
+# --- GENERATE SPACE ---
+obstacles = (np.random.rand(OBSTACLE_DENSITY, 3) * MISSION_DISTANCE) - (MISSION_DISTANCE * 0.1)
+
+# --- RUN MISSION ---
+probe = BoronProbe()
+steps = 0
+while np.linalg.norm(probe.position - probe.target) > STEP_SIZE and steps < 500:
+    probe.scan_and_move(obstacles)
+    steps += 1
+
+# --- VISUALIZATION ---
+path = np.array(probe.path_history)
+
+fig = plt.figure(figsize=(10, 8))
+ax = fig.add_subplot(111, projection='3d')
+
+# Plot Obstacles (Stars/Debris)
+ax.scatter(obstacles[:,0], obstacles[:,1], obstacles[:,2], c='red', s=5, alpha=0.3, label='Gravity Wells / Debris')
+
+# Plot Flight Path
+ax.plot(path[:,0], path[:,1], path[:,2], c='cyan', linewidth=2, label='Mark V-B Flight Path')
+
+# Plot Start/End
+ax.scatter(0, 0, 0, c='green', s=100, marker='^', label='Earth')
+ax.scatter(probe.target[0], probe.target[1], probe.target[2], c='gold', s=150, marker='*', label='Alpha Centauri')
+
+ax.set_title(f"Mark V-B 'Ricochet' Simulation\nTotal Bounces: {probe.ricochet_count} | Path Efficiency: {100 * MISSION_DISTANCE / (steps*STEP_SIZE):.1f}%")
+ax.set_xlabel('X (Light Years)')
+ax.set_ylabel('Y')
+ax.set_zlabel('Z')
+ax.legend()
+plt.show()
